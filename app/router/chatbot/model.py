@@ -2,7 +2,7 @@ from pydantic import BaseModel
 
 
 class ChatInput(BaseModel):
-    question : str
+    input : str
 
 
 class WhatsappInput(BaseModel):

@@ -1,0 +1,16 @@
+Analisis pesan pengguna berikut dan riwayat percakapan jika ada.
+Tugas utama Anda adalah mengidentifikasi maksud (intent) utama dari pesan pengguna dan mengekstrak nama pengguna jika disebutkan.
+Intent yang mungkin: "bertanya_produk", "bertanya_layanan", "bertanya_harga", "bertanya_profil_perusahaan", "bertanya_bahan_sablon", "niat_order", "keluhan", "sapaan", "tidak_jelas", "lainnya".
+Jika pengguna menyebutkan nama, ekstrak sebagai "user_name". Jika tidak, "user_name" adalah null.
+
+Riwayat Percakapan:
+{history}
+
+Pesan Pengguna: {input}
+
+Berikan output HANYA dalam format JSON berikut tanpa penjelasan tambahan:
+```json
+{{
+  "intent": "...",
+  "user_name": "..."
+}}

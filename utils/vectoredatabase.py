@@ -11,6 +11,7 @@ class FaissVectorStoreLoader:
             model=embedding_model,
             google_api_key=api_key
         )
+        
         self.index_path = index_path
         self.vector_store = None
         self.retriever = None
@@ -18,13 +19,16 @@ class FaissVectorStoreLoader:
     def load_or_create(self, documents, index_name="default", overwrite=True):
         index_dir = os.path.join(self.index_path, index_name)
         index_file_path = os.path.join(index_dir, "index.faiss")
-
         index_exists = os.path.exists(index_file_path)
 
         if index_exists and not overwrite:
             print(f"[INFO] Loading existing FAISS index '{index_name}'...")
             self.vector_store = FAISS.load_local(index_dir, self.embedding, allow_dangerous_deserialization=True)
         else:
+            if not documents:
+                print(f"[WARNING] Tidak ada dokumen yang diberikan untuk membuat/overwrite index '{index_name}'. Proses dilewati.")
+                return None # Kembalikan None untuk menandakan tidak ada retriever yang dibuat
+            # === AKHIR PERBAIKAN ===
             if index_exists and overwrite:
                 print(f"[INFO] Overwriting existing FAISS index '{index_name}'...")
             else:
