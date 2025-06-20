@@ -1,2 +1,8 @@
 .env
 env
+faiss_index
+templates
+history
+.gitignore
+restart.sh
+running.sh
