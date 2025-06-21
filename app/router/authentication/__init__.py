@@ -10,16 +10,11 @@ from app.service.authentication import AccountService,verify_cookie
 from app.service.database.auth import Auth
 from utils.security import encrypt_cookie,decrypt_cookie
 from config.mysql import get_db
+
 authentication_router = APIRouter(prefix="/authentication")
 
 @authentication_router.post("/login")
 async def login_for_access_token(response : Response,request : Request, form_data : OAuth2PasswordRequestForm = Depends(),db: AsyncSession = Depends(get_db)):
-    # token = request.cookies.get("session_user")
-    # if token:
-    #     raise HTTPException(
-    #         status_code=409,
-    #         detail="Akun sudah login",
-    #     )
     user = Auth(form_data.username, form_data.password,db)
     check_login= await user.login()
     if check_login['status'] == False:
@@ -28,21 +23,9 @@ async def login_for_access_token(response : Response,request : Request, form_dat
             detail=check_login['detail'],
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
     access_token = create_access_token(
         data={"username": check_login["data"]["username"],"id":check_login["data"]["id"]}
     )
-    # encrypt_token = encrypt_cookie(access_token)
-    # response.set_cookie(
-    #     key="session_user",
-    #     value=access_token,
-    #     httponly=True,       # Tidak bisa diakses JavaScript (mencegah XSS)
-    #     secure=True,         # Hanya dikirim via HTTPS (jangan lupa pakai HTTPS di production)
-    #     samesite="strict",   # Mencegah CSRF
-    #     max_age=60*60*24,    # Expired 1 hari
-    #     path="/"
-    # )
-    
     return {"access_token": access_token ,"token_type": "bearer"}
 
 
@@ -67,6 +50,3 @@ async def register(input_account : RegisterInput,db: AsyncSession = Depends(get_
         print(f"Error : {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,detail="Something Error")
 
-
-
-# TESTING
