@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from app.router.chatbot import router_chat
 from app.router.products import router_product
 from app.router.prompts import router_prompts
@@ -9,16 +9,20 @@ from slowapi.errors import RateLimitExceeded
 from fastapi.middleware.cors import CORSMiddleware
 
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(title="Customer Service AI",root_path="/api/v1")
+app = FastAPI(title="Customer Service AI")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
-app.include_router(router=router_product)
-app.include_router(router=router_prompts)
-app.include_router(router=router_chat)
-app.include_router(router=authentication_router)
 
+api_router = APIRouter(prefix="/api/v1")
+
+api_router.include_router(router_product)
+api_router.include_router(router_prompts)
+api_router.include_router(router_chat)
+api_router.include_router(authentication_router)
+
+app.include_router(api_router)
 
 origins = [
     "*"

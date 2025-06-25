@@ -12,32 +12,22 @@ from langchain_postgres import PostgresChatMessageHistory
 from config.mysql import PG_DATABASE_URL
 import os,uuid,psycopg
 
+
+THRESHOLD_TINGGI = 0.85  # Jalur A: Sangat yakin, jawab langsung.
+THRESHOLD_SEDANG = 0.70  # Jalur B: Cukup mirip, minta klarifikasi.
+
 with open("./prompts/fix_template.txt",'r') as file:
     FIXED_RAG_STRUCTURE = file.read()
+
+
+with open("./prompts/intent_template_cs.txt",'r') as file:
+    INTENT_STRUCTURE = file.read()
 
 if not os.path.exists("history"):
     os.makedirs("history")
 
 
-def perform_rag_query(user,prompt, question: str):
-    retriever = vectorstore.as_retriever(
-        search_type="similarity",
-        search_kwargs={"k": 3, "filter": {"user_id": user['id']}}
-    )
-    
-    relevant_docs = retriever.invoke(question)
-    retrieved_info = "\n".join([doc.page_content for doc in relevant_docs[:5]])
-    user_persona = prompt
-
-    final_system_prompt = FIXED_RAG_STRUCTURE.format(user_persona=user_persona, context=retrieved_info)
-
-    template_prompt = ChatPromptTemplate.from_messages([
-        ("system", final_system_prompt),
-        MessagesPlaceholder(variable_name="history"), 
-        ("human", "{input}")
-    ])
-
-    def get_session_history(session_id : str) -> PostgresChatMessageHistory:
+def get_session_history(session_id : str) -> PostgresChatMessageHistory:
         sync_connection = psycopg.connect(PG_DATABASE_URL)
         table_name = "chat_history"
         chat_history = PostgresChatMessageHistory(
@@ -47,7 +37,51 @@ def perform_rag_query(user,prompt, question: str):
         )
         return chat_history
 
-    session_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"user_{user['id']}_chat"))
+
+def perform_rag_query(user,prompt,telp_customer, question: str):
+    session_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"user_{user['id']}_{telp_customer}_chat"))
+    retriever = vectorstore.similarity_search_with_relevance_scores(
+        question,
+        k=3,
+        filter={"user_id": user['id']}
+    )
+    
+
+    intent_prompt = ChatPromptTemplate.from_messages([
+        ("system", INTENT_STRUCTURE), # Gunakan template intent yang baru
+        MessagesPlaceholder(variable_name="history"),
+        ("human", "{input}")
+    ])
+
+    intent_chain = intent_prompt | llm | JsonOutputParser()
+    intent_detection_with_history = RunnableWithMessageHistory(
+            intent_chain,
+            get_session_history,
+            input_messages_key="input",
+            history_messages_key="history",
+    )
+
+    detected_intent_json = intent_detection_with_history.invoke(
+            {"input": question},
+            config={"configurable": {"session_id": session_id}}
+    )
+
+    
+    # relevant_docs = retriever.invoke(question)
+    retrieved_info = "\n".join([doc.page_content for doc,score in retriever[:5]])
+    user_persona = prompt
+
+    final_system_prompt = FIXED_RAG_STRUCTURE.format(user_persona=user_persona, context=retrieved_info)
+
+
+    template_prompt = ChatPromptTemplate.from_messages([
+        ("system", final_system_prompt),
+        MessagesPlaceholder(variable_name="history"), 
+        ("human", "{input}")
+    ])
+
+
+    
     rag_chain = template_prompt | llm | StrOutputParser()
     chain_with_history = RunnableWithMessageHistory(
         rag_chain,
@@ -56,9 +90,12 @@ def perform_rag_query(user,prompt, question: str):
         history_messages_key="history",
     )
 
-    response = chain_with_history.invoke(
+    final_response = chain_with_history.invoke(
         {"input": question},
         config={"configurable": {"session_id": session_id}}
     )
     
-    return response
+    return {
+        "response" : final_response,
+        "intent" : detected_intent_json
+    }

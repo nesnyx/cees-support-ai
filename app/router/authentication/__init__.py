@@ -7,7 +7,7 @@ from app.service.authentication import create_access_token,get_current_user,veri
 from app.service.authentication.models import User, Token
 from app.router.authentication.model import RegisterInput
 from app.service.authentication import AccountService,verify_cookie
-from app.service.database.auth import Auth
+from app.service.database.auth import Auth, get_prompt_template
 from utils.security import encrypt_cookie,decrypt_cookie
 from config.mysql import get_db
 
@@ -24,15 +24,16 @@ async def login_for_access_token(response : Response,request : Request, form_dat
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token = create_access_token(
-        data={"username": check_login["data"]["username"],"id":check_login["data"]["id"]}
+        data={"username": check_login["data"]["username"],"id":check_login["data"]["id"],"prompt" : check_login["data"]["prompt"]}
     )
     return {"access_token": access_token ,"token_type": "bearer"}
 
 
 
 @authentication_router.get("/users/me")
-async def read_cookies(request : Request,current_user = Depends(get_current_user)):
-    return {"user_id": current_user['id'],"username":current_user["username"]}
+async def read_cookies(request : Request,current_user = Depends(get_current_user),db: AsyncSession = Depends(get_db)):
+    prompt_template = await get_prompt_template(current_user['id'],db)
+    return {"user_id": current_user['id'],"username":current_user["username"],"prompt":prompt_template["data"]["prompt"]}
     
 
 @authentication_router.post("/register")

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 @router_chat.post("/interect")
-async def interect_chatbot(input_data : ChatInput,request : Request,user_id:str,db: AsyncSession = Depends(get_db)):
+async def interect_chatbot(input_data : ChatInput,request : Request,user_id:str,telp_customer:str,db: AsyncSession = Depends(get_db)):
     try:
         check_user = await get_user_by_id(db,user_id)
         print(f"check_user : {check_user['data'][0]}")
@@ -28,7 +28,7 @@ async def interect_chatbot(input_data : ChatInput,request : Request,user_id:str,
         if get_prompt_by_user_id['status'] == False:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="prompt doesnt exist")
         prompt = get_prompt_by_user_id['data'][0]['system_template']
-        chatbot = perform_rag_query(check_user['data'][0],prompt,input_data.input)
+        chatbot = perform_rag_query(check_user['data'][0],prompt,telp_customer,input_data.input)
         return {
             "msg":chatbot
         }
