@@ -59,7 +59,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     Dependency untuk memvalidasi token dan mendapatkan data pengguna.
     Ini yang akan digunakan untuk memproteksi endpoint.
     """
-    # cookies = request.cookies.get("session_user")
+    # cookies = request.cookies.get("session_user")   
     if not token:
         raise credentials_exception
     
@@ -67,9 +67,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("username")
         userId : int = payload.get("id")
+        prompt : str = payload.get("prompt")
         if username is None or userId is None:
             raise credentials_exception
-        return {"username": username, "id" : userId} 
+        return {"username": username, "id" : userId, "prompt" : prompt} 
     except JWTError:
         raise credentials_exception
 

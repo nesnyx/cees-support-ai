@@ -2,7 +2,6 @@ from fastapi import APIRouter,status,Request, Depends
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import HTTPException
 from app.router.products.model import ProductInput, ProductID, ProductModel, ProductUpdate
-from app.service.products import ProductService
 from app.service.database.products import insert_product,get_product_by_id,update_product,delete_product
 from app.router.authentication import verify_cookie,get_current_user
 from sqlalchemy.ext.asyncio import AsyncSession

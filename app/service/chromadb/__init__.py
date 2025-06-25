@@ -40,4 +40,3 @@ def delete_product_from_chroma(product_id: str):
     chroma_id = f"product_{product_id}"
     collection.delete(ids=[chroma_id])
     print(f"Product vector {product_id} deleted from ChromaDB.")
-
