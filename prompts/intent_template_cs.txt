@@ -1,52 +1,15 @@
 Analisis pesan pengguna berikut dan riwayat percakapan jika ada.
 Tugas utama Anda adalah mengidentifikasi maksud (intent) utama dari pesan pengguna dan mengekstrak nama pengguna jika disebutkan.
-Intent yang mungkin:
-"bertanya_produk", "bertanya_layanan", "bertanya_harga", "bertanya_profil_perusahaan", "bertanya_bahan_sablon", "niat_order", "keluhan", "sapaan", "tidak_jelas", "lainnya".
-Tugas Anda adalah memutuskan respons terbaik berdasarkan hasil pencarian dari database.
 
+Intent yang mungkin:
+"bertanya_produk", "bertanya_layanan", "bertanya_harga", "bertanya_profil_perusahaan", "niat_order", "keluhan", "sapaan", "tidak_jelas", "lainnya".
+
+Tugas Anda adalah memutuskan respons terbaik berdasarkan hasil pencarian dari database.
 Anda akan diberikan pertanyaan pengguna dan hasil pencarian yang relevan beserta skornya.
 
 Riwayat Percakapan:
 {history}
 
-
-
-## Aturan Respons:
-1.  **Skor Tinggi (>0.85):** Jawab langsung pertanyaan pengguna seolah-olah Anda sudah tahu jawabannya.
-2.  **Skor Sedang (0.70 - 0.85):** Katakan Anda tidak menemukan yang persis sama, lalu tawarkan produk yang Anda temukan sebagai alternatif.
-3.  **Skor Rendah (<0.70):** Katakan Anda tidak bisa menemukannya dan akan eskalasi ke tim manusia.
-
-
-## Contoh-contoh:
-
-### Contoh 1: Skor Tinggi
-Input:
-- Pertanyaan: "Berapa harga laptop ABC?"
-- Hasil Pencarian: "Dokumen 1 (Skor: 0.92): Laptop ABC harganya Rp 10.000.000."
-Output JSON:
-{{
-  "status": "JAWABAN_LANGSUNG",
-  "response": "Tentu, harga untuk Laptop ABC adalah Rp 10.000.000."
-}}
-
-### Contoh 2: Skor Sedang
-Input:
-- Pertanyaan: "Apakah ada mouse gaming XYZ?"
-- Hasil Pencarian: "Dokumen 1 (Skor: 0.78): Kami memiliki mouse gaming ABC yang sangat populer."
-Output JSON:
-{{
-  "status": "BUTUH_KLARIFIKASI",
-  "response": "Maaf, saya tidak menemukan mouse gaming dengan tipe XYZ. Namun, kami memiliki mouse gaming ABC yang sangat populer. Apakah Anda tertarik dengan tipe ini?"
-}}
-
-### Contoh 3: Skor Rendah
-Input:
-- Pertanyaan: "Jual keyboard mekanik ungu?"
-- Hasil Pencarian: "Dokumen 1 (Skor: 0.65): Keyboard ini berwarna hitam."
-
-
----
-Sekarang, proses input berikut.
 
 Pertanyaan Pengguna: {input}
 
@@ -54,6 +17,6 @@ Pertanyaan Pengguna: {input}
 Output JSON:
 ```json
 {{
-  "status": "ESKALASI",
-  "response": "Maaf, saya tidak dapat menemukan keyboard mekanik berwarna ungu di data kami. Agar Anda mendapat bantuan lebih lanjut, saya akan meneruskan permintaan ini ke tim kami."
+  "status": "<JAWABAN_LANGSUNG | BUTUH_KLARIFIKASI | ESKALASI>",
+  "response": "<Jawaban untuk pengguna berdasarkan aturan skor>"
 }}

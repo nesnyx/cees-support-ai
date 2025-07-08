@@ -8,6 +8,7 @@ vectorstore = Chroma(
     embedding_function=embedding_model
 )
 
+
 def check_product_exists(product_id: str) -> bool:
     chroma_id = f"product_{product_id}"
     results = collection.get(ids=[chroma_id])

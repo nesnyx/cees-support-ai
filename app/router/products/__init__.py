@@ -5,7 +5,7 @@ from app.router.products.model import ProductInput, ProductID, ProductModel, Pro
 from app.service.database.products import insert_product,get_product_by_id,update_product,delete_product
 from app.router.authentication import verify_cookie,get_current_user
 from sqlalchemy.ext.asyncio import AsyncSession
-from config.mysql import get_db
+from config.postgresql import get_db
 from app.service.chromadb import upsert_product_to_chroma,delete_product_from_chroma,check_product_exists
 from app.service.database.products import get_all_products_by_user
 import logging

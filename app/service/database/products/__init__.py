@@ -1,4 +1,4 @@
-from config.mysql import get_db
+from config.postgresql import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import text
@@ -15,7 +15,7 @@ class Product:
 
     async def get_product(self):
         query = text("SELECT id, user_id, name, price, description FROM products WHERE user_id = :user_id")
-        check_account =  await db.execute(query, {
+        check_account =  await self.db.execute(query, {
             "user_id" : self.user_id
         })
         row = check_account.fetchone()

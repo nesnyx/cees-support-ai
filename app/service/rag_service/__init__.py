@@ -1,88 +1,68 @@
-from sqlalchemy.orm import Session
-from app.router.products.model import ProductID, ProductInput, ProductModel
-from utils.chromadb import collection, embedding_model,client
+from datetime import timedelta
 from app.service.chromadb import vectorstore
 from utils.model import llm
-from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
+from langchain_core.output_parsers import  JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.runnables.history import RunnableWithMessageHistory
-from langchain.memory.chat_message_histories import FileChatMessageHistory
 from langchain_postgres import PostgresChatMessageHistory
 from config.mysql import PG_DATABASE_URL
-import os,uuid,psycopg
+from langchain_community.chat_message_histories.redis import RedisChatMessageHistory
+import uuid, psycopg
 
+from langgraph.prebuilt import create_react_agent
 
-THRESHOLD_TINGGI = 0.85  # Jalur A: Sangat yakin, jawab langsung.
-THRESHOLD_SEDANG = 0.70  # Jalur B: Cukup mirip, minta klarifikasi.
-
-with open("./prompts/fix_template.txt",'r') as file:
+with open("./prompts/fix_template.txt", "r") as file:
     FIXED_RAG_STRUCTURE = file.read()
 
 
-with open("./prompts/intent_template_cs.txt",'r') as file:
-    INTENT_STRUCTURE = file.read()
-
-if not os.path.exists("history"):
-    os.makedirs("history")
-
-
-def get_session_history(session_id : str) -> PostgresChatMessageHistory:
-        sync_connection = psycopg.connect(PG_DATABASE_URL)
-        table_name = "chat_history"
-        chat_history = PostgresChatMessageHistory(
-            table_name,
-            session_id,
-            sync_connection=sync_connection
-        )
-        return chat_history
-
-
-def perform_rag_query(user,prompt,telp_customer, question: str):
-    session_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"user_{user['id']}_{telp_customer}_chat"))
-    retriever = vectorstore.similarity_search_with_relevance_scores(
-        question,
-        k=3,
-        filter={"user_id": user['id']}
-    )
-    
-
-    intent_prompt = ChatPromptTemplate.from_messages([
-        ("system", INTENT_STRUCTURE), # Gunakan template intent yang baru
-        MessagesPlaceholder(variable_name="history"),
-        ("human", "{input}")
-    ])
-
-    intent_chain = intent_prompt | llm | JsonOutputParser()
-    intent_detection_with_history = RunnableWithMessageHistory(
-            intent_chain,
-            get_session_history,
-            input_messages_key="input",
-            history_messages_key="history",
+def get_session_history(session_id: str):
+    sync_connection = psycopg.connect(PG_DATABASE_URL)
+    table_name = "chat_history"
+    chat_history = PostgresChatMessageHistory(
+        table_name, session_id, sync_connection=sync_connection
     )
 
-    detected_intent_json = intent_detection_with_history.invoke(
-            {"input": question},
-            config={"configurable": {"session_id": session_id}}
+    return chat_history
+
+
+def retrieve_relevant_documents(question: str, user_id: str, k: int = 1):
+    results = vectorstore.similarity_search_with_relevance_scores(
+        question, k=k, filter={"user_id": user_id}
     )
 
-    
-    # relevant_docs = retriever.invoke(question)
-    retrieved_info = "\n".join([doc.page_content for doc,score in retriever[:5]])
+    if not results:
+        return []
+
+    results = sorted(results, key=lambda x: x[1], reverse=True)
+    return results
+
+
+def perform_rag_query(user, prompt, telp_customer, question: str):
+    session_id = str(
+        uuid.uuid5(uuid.NAMESPACE_DNS, f"user_{user['id']}_{telp_customer}_chat")
+    )
+    retriever_results = retrieve_relevant_documents(question, user["id"], k=3)
+
+    retrieved_info = "\n\n".join([doc.page_content for doc, _ in retriever_results])
     user_persona = prompt
 
-    final_system_prompt = FIXED_RAG_STRUCTURE.format(user_persona=user_persona, context=retrieved_info)
-
-
-    template_prompt = ChatPromptTemplate.from_messages([
-        ("system", final_system_prompt),
-        MessagesPlaceholder(variable_name="history"), 
-        ("human", "{input}")
-    ])
-
-
+    system_prompt = ChatPromptTemplate.from_template(FIXED_RAG_STRUCTURE)
+    final_system_prompt = system_prompt.format_messages(
+        user_persona=user_persona,
+        context=retrieved_info,
+    )[0]
     
-    rag_chain = template_prompt | llm | StrOutputParser()
+    template_prompt = ChatPromptTemplate.from_messages(
+        [
+            final_system_prompt,
+            MessagesPlaceholder(variable_name="history"),
+            ("human", "{input}"),
+        ]
+    )
+    
+
+    rag_chain = template_prompt | llm | JsonOutputParser()
+    
     chain_with_history = RunnableWithMessageHistory(
         rag_chain,
         get_session_history,
@@ -91,11 +71,7 @@ def perform_rag_query(user,prompt,telp_customer, question: str):
     )
 
     final_response = chain_with_history.invoke(
-        {"input": question},
-        config={"configurable": {"session_id": session_id}}
+        {"input": question}, config={"configurable": {"session_id": session_id}}
     )
-    
-    return {
-        "response" : final_response,
-        "intent" : detected_intent_json
-    }
+
+    return {"result": final_response}

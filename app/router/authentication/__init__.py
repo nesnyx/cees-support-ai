@@ -4,12 +4,12 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.service.authentication import create_access_token,get_current_user,verify_password,get_password_hash
-from app.service.authentication.models import User, Token
-from app.router.authentication.model import RegisterInput
+
+from app.router.authentication.model import RegisterInput, LoginInput
 from app.service.authentication import AccountService,verify_cookie
 from app.service.database.auth import Auth, get_prompt_template
 from utils.security import encrypt_cookie,decrypt_cookie
-from config.mysql import get_db
+from config.postgresql import get_db
 
 authentication_router = APIRouter(prefix="/authentication")
 
@@ -32,8 +32,7 @@ async def login_for_access_token(response : Response,request : Request, form_dat
 
 @authentication_router.get("/users/me")
 async def read_cookies(request : Request,current_user = Depends(get_current_user),db: AsyncSession = Depends(get_db)):
-    prompt_template = await get_prompt_template(current_user['id'],db)
-    return {"user_id": current_user['id'],"username":current_user["username"],"prompt":prompt_template["data"]["prompt"]}
+    return {"user_id": current_user['id'],"username":current_user["username"],"prompt":current_user["prompt"]}
     
 
 @authentication_router.post("/register")

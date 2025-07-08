@@ -4,23 +4,47 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 class Auth:
-    def __init__(self,username : str, password : str, db : AsyncSession):
+    def __init__(self,username, password , db : AsyncSession):
         self.username = username
         self.password = password
         self.db = db
     async def login(self):
-        query = text("SELECT a.id, a.username,a.hash,pt.system_template FROM accounts a INNER JOIN prompt_template pt ON pt.user_id = a.id WHERE a.username = :username")
-        check_account =  await self.db.execute(query, {
-            "username" : self.username
+        # Query ambil akun berdasarkan username
+        query = text("SELECT id, username, hash FROM accounts WHERE username = :username")
+        check_account = await self.db.execute(query, {
+            "username": self.username
         })
         account_data = check_account.mappings().first()
         print(f"account data : {account_data}")
+
+        # Cek apakah akun ditemukan
         if not account_data:
             return {"status": False, "detail": "Username atau password salah"}
 
+        # Verifikasi password
         if not verify_password(self.password, account_data['hash']):
             return {"status": False, "detail": "Username atau password salah"}
-        return {"status": True, "data": {"id": account_data['id'], "username": account_data['username'], 'prompt':account_data['system_template']}}
+
+        # Query untuk ambil template prompt jika ada
+        query_template = text("""
+            SELECT pt.system_template 
+            FROM prompts pt 
+            WHERE pt.user_id = :user_id
+        """)
+        check_template = await self.db.execute(query_template, {
+            "user_id": account_data['id']
+        })
+        prompt_template = check_template.mappings().first()
+
+        return {
+            "status": True,
+            "data": {
+                "id": account_data['id'],
+                "username": account_data['username'],
+                "prompt": prompt_template['system_template'] if prompt_template else [None]
+            }
+        }
+
 
     async def register(self):
         hashed_password = get_password_hash(self.password)

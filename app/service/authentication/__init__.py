@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException, status,Request
 from fastapi.security import OAuth2PasswordBearer
 
 from jose import JWTError, jwt
-from config.db import db
+from config.postgresql import get_db
 from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
@@ -96,6 +96,7 @@ async def get_user_by_id(db : AsyncSession,user_id :str ):
         get_user = await db.execute(query, {
             "user_id" : user_id
         })
+        
         row = get_user.mappings().all()
         if not row:
             return {"data" : {},"status":False}
@@ -110,7 +111,7 @@ class AccountService:
     def __init__(self,username = "", password = ""):
         self.username = username
         self.password = password
-        self.db = db
+        self.db = get_db()
     
     def register(self):
         try:
