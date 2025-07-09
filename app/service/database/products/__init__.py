@@ -52,7 +52,6 @@ async def get_product_by_id(db: AsyncSession, product_id: str, user_id: str) -> 
     """)
     
     result = await db.execute(query, {"id": product_id, "user_id": user_id})
-    
     row = result.mappings().first()
     print(f"Get product by id : {row}")
     if not row:
@@ -63,16 +62,17 @@ async def get_product_by_id(db: AsyncSession, product_id: str, user_id: str) -> 
 
 
 
-async def insert_product(db: AsyncSession,input:ProductInput, user_id: str):
+async def insert_product(db: AsyncSession,name,price,description, image,user_id: str):
         new_product_id = str(uuid.uuid4())
-        query = text("INSERT INTO products(id,user_id, name, price, description) VALUES (:id,:user_id, :name, :price, :description )")
+        query = text("INSERT INTO products(id,user_id, name, price,image_url, description) VALUES (:id,:user_id, :name, :price,:image_url, :description )")
         try:
             await db.execute(query, {
                 "id": new_product_id,
                 "user_id": user_id,
-                "name": input.name,
-                "price": input.price,
-                "description": input.description
+                "name": name,
+                "price": price,
+                "image_url": image,
+                "description": description
             })
             await db.commit()
             return {"status": True, "id": new_product_id}

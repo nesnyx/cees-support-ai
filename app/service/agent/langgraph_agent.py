@@ -118,9 +118,7 @@ class FixedLangGraphAgent:
             model=llm, tools=tools, checkpointer=self.postgres_checkpointer
         )
         print(f"Agent : {self.agent}")
-        # initial_agent = initialize_agent(
-        #     tools=tools, llm=llm, agent=AgentType.CONVERSATIONAL_REACT_DESCRIPTION
-        # )
+
 
         self.user_persona = user_persona
         logger.info(f"Agent created for user {user_id}")
@@ -157,15 +155,14 @@ class FixedLangGraphAgent:
                 Kamu adalah asisten AI Customer Service dengan akses ke alat berikut:
 
                 1. **search_user_knowledge**: Untuk mencari informasi dalam basis pengetahuan (produk, layanan, FAQ)
-
                 2. **save_order**: Untuk menyimpan pesanan ke database setelah detail lengkap & konfirmasi
                 3. **check_order_status**: Untuk mengecek status pesanan berdasarkan Order ID
-
+                4. **send_image_to_customer** : Untuk mengirimkan image_url dari table product dan dikirim
                 INSTRUKSI PENTING:
                 - Gunakan search_user_knowledge untuk menjawab pertanyaan produk/layanan
                 - Gunakan check_order_status ketika pelanggan memberikan nomor pesanan
-
                 - Gunakan save_order hanya setelah SEMUA detail dikonfirmasi pelanggan
+                - Gunakan send_image_to_customer ketika customer meminta gambar yang related berdasarkan nama produknya
                 - Ingat percakapan sebelumnya (memory otomatis tersimpan)
                 - Berikan jawaban yang ramah, akurat, dan membantu
                 - Gunakan Bahasa Indonesia yang baik dan benar
@@ -173,6 +170,7 @@ class FixedLangGraphAgent:
                 🚨 **PERINGATAN KERAS:**
                 JANGAN PERNAH menulis dalam bahasa selain Bahasa Indonesia!
                 Ini adalah sistem Customer Service Indonesia!
+                ddan jangan membicarakan hal diluar dari konteks yang seharusnya.
                 """
                 
             )
@@ -212,50 +210,7 @@ class FixedLangGraphAgent:
                 "status": "error",
             }
 
-    async def get_conversation_history(self, session_id: str):
-        """Method untuk mendapatkan history percakapan dari PostgreSQL"""
-        try:
-            config = {
-                "configurable": {
-                    "thread_id": session_id,
-                    "checkpoint_ns": "customer_service",
-                }
-            }
-
-            # Get checkpoint dari PostgreSQL
-            checkpoint = await self.postgres_checkpointer.aget(config)
-
-            if checkpoint and checkpoint.get("channel_values"):
-                messages = checkpoint["channel_values"].get("messages", [])
-                history = []
-                for msg in messages:
-                    history.append(
-                        {
-                            "type": "human" if isinstance(msg, HumanMessage) else "ai",
-                            "content": (
-                                msg.content if hasattr(msg, "content") else str(msg)
-                            ),
-                        }
-                    )
-                return history
-
-            return []
-
-        except Exception as e:
-            logger.error(f"Error getting conversation history: {e}")
-            return []
-
-    async def close(self):
-        """Close resources"""
-        try:
-            if self.memory_conn:
-                await self.pool.putconn(self.memory_conn)
-            if self.pool:
-                await self.pool.close()
-            logger.info("Fixed agent resources closed")
-        except Exception as e:
-            logger.error(f"Error closing resources: {e}")
-
+    
 
 # Global instance
 ai_agent = FixedLangGraphAgent()

@@ -1,16 +1,22 @@
 from langchain_core.tools import tool
 from app.service.agent.models import (
     OrderInput,
-    OrderSearchInput,
+    GetProductByUserID,
     OrderStatusInput,
     OrderCancelInput,
     OrderUpdateInput,
+    SendImageProductToCustomer,
 )
 from config.postgresql import get_db
 from datetime import datetime, timedelta
 from sqlalchemy import text
 import uuid, logging
 from app.service.chromadb import vectorstore
+import requests, asyncio
+from app.service.agent.services.send_message_to_admin import (
+    send_message_to_admin_service_async,
+    send_image_to_admin_service_async,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +40,6 @@ def create_tools(user_id: str):
         Gunakan tool ini HANYA SETELAH kamu mengkonfirmasi SEMUA detail pesanan
         (nama pelanggan, nama produk, jumlah, level es, level gula, temperature) dengan pelanggan
         dan pelanggan sudah setuju untuk membuat pesanan. atau jika di rasa pelanggan sudah intensi oke langsung simpan saja pesanan agar tidak menunggu.
-        atau berikan note dibawah nya seperti : "Balas Oke Jika sudah Betul!"
 
         Args:
             customer_name: Nama lengkap pelanggan.
@@ -44,7 +49,6 @@ def create_tools(user_id: str):
             level_sugar: Level sugar yang dipesan.
             temperature: Temperatur yang dipesan panas atau dingin.
             status: Status pemesanan default ON-PROCESS.
-
 
         Returns:
             Pesan konfirmasi berisi nomor pesanan jika berhasil, atau pesan error jika gagal.
@@ -74,6 +78,45 @@ def create_tools(user_id: str):
                         },
                     )
                     await db.commit()
+
+                    query = text(
+                        """
+                        SELECT order_id, customer_name, product_name, quantity, 
+                               level_ice, level_sugar, temperature, status, order_time
+                        FROM orders 
+                        WHERE order_id = :order_id
+                        """
+                    )
+                    result = await db.execute(query, {"order_id": order_id})
+                    order = result.fetchone()
+                    if order:
+                        # Format status dengan emoji
+                        status_emoji = {
+                            "ON-PROCESS": "🔄",
+                            "COMPLETED": "✅",
+                        }
+
+                        status_icon = status_emoji.get(order[0], "📋")
+
+                        response = f"""
+                            🔍 **STATUS PESANAN DITEMUKAN**
+
+                            📋 **Detail Pesanan:**
+                            - Nomor Pesanan: **{order[0]}**
+                            - Nama Pelanggan: {order[1]}
+                            - Produk: {order[2]}
+                            - Jumlah: {order[3]}
+                            - Level Es: {order[4]}
+                            - Level Gula: {order[5]}
+                            - Suhu: {order[6]}
+
+                            {status_icon} **Status: {order[7]}**
+                            📅 Tanggal Pesanan: {order[8].strftime('%d/%m/%Y %H:%M')}
+
+                                                    """
+
+                        await send_message_to_admin_service_async(message=response)
+
                     print("✅ Insert berhasil dengan ID:", product_name)
                 except Exception as e:
                     await db.rollback()
@@ -86,6 +129,54 @@ def create_tools(user_id: str):
             # logger.error(f"Gagal menyimpan pesanan: {e}") # Praktik terbaik untuk logging
             print(f"--- ERROR SAAT MENYIMPAN PESANAN: {e} ---")
             return f"Terjadi kesalahan teknis saat menyimpan pesanan: {str(e)}. Mohon informasikan kepada pelanggan dan coba lagi nanti."
+
+    @tool(args_schema=SendImageProductToCustomer)
+    async def send_image_to_customer(name: str, user: str):
+        """
+        mengambil gambar/image_url products berdasarkan name dan user_id untuk mengambil gambar dan mengirim ke customer.
+        Gunakan saat pelanggan minta gambar produk.
+
+        Args:
+            name: Nama lengkap pelanggan.
+            user: User pemilik produk yang membuat didatabase.
+
+        Returns:
+            Pesan konfirmasi berisi gambar dari produk yang diminta.
+        """
+        print(f"--- CHECKING GAMBAR PRODUCT FOR: {name} ---")
+        user = user_id
+        try:
+            async for db in get_db():
+                try:
+                    query = text(
+                        """
+                        SELECT name, image_url, description
+                        FROM products 
+                        WHERE name LIKE :name AND user_id = :user_id
+                        """
+                    )
+                    result = await db.execute(
+                        query, {"name": f"{name}%", "user_id": user}
+                    )
+                    product = result.fetchone()
+                    print("✅Product Image : ", product[1])
+
+                    if product:
+                        image_url = product[1]
+                        response = f"Ini gambar produk **{product[0]}**"
+
+                        print(f"✅ product found: {product[0]}")
+                        await send_image_to_admin_service_async(response, image_url)
+                        return response.strip()
+                    else:
+                        print(f"❌ product gambar not found: {name}")
+                        return f"❌ Gambar produk dengan nama **{name}** tidak ditemukan.\n\n💡 Cek lagi nama produk Anda."
+                except Exception as e:
+                    print(f"❌ Database error: {e}")
+                    return f"Terjadi kesalahan saat mencari produk: {str(e)}"
+        except Exception as e:
+            print(f"--- ERROR CHECKING ORDER: {e} ---")
+            return f"Terjadi kesalahan sistem saat mengecek produk: {str(e)}"
 
     @tool(args_schema=OrderStatusInput)
     async def check_order_status(order_id: str):
@@ -117,7 +208,6 @@ def create_tools(user_id: str):
                     )
                     result = await db.execute(query, {"order_id": order_id})
                     order = result.fetchone()
-                    print(order)
                     if order:
                         # Format status dengan emoji
                         status_emoji = {
@@ -337,7 +427,7 @@ def create_tools(user_id: str):
                         params[field] = value
 
                     update_query = text(
-                            f"""
+                        f"""
                         UPDATE orders 
                         SET {', '.join(set_clauses)}
                         WHERE order_id = :order_id
@@ -347,8 +437,10 @@ def create_tools(user_id: str):
                     await db.execute(update_query, params)
                     await db.commit()
                     # Log update untuk audit trail
-                        # Get updated order data untuk response
-                    updated_result = await db.execute(check_query, {"order_id": order_id})
+                    # Get updated order data untuk response
+                    updated_result = await db.execute(
+                        check_query, {"order_id": order_id}
+                    )
                     updated_order = updated_result.fetchone()
 
                     # Log perubahan yang dilakukan
@@ -359,7 +451,7 @@ def create_tools(user_id: str):
                         "quantity": "Jumlah",
                         "level_ice": "Level Es",
                         "level_sugar": "Level Gula",
-                        "temperature": "Temperatur"
+                        "temperature": "Temperatur",
                     }
 
                     for field, new_value in fields_to_update.items():
@@ -369,12 +461,13 @@ def create_tools(user_id: str):
                             "quantity": 3,
                             "level_ice": 4,
                             "level_sugar": 5,
-                            "temperature": 6
+                            "temperature": 6,
                         }
                         old_value = order[field_index[field]]
                         if old_value != new_value:
-                            changes.append(f"{field_names[field]}: {old_value} → {new_value}")
-
+                            changes.append(
+                                f"{field_names[field]}: {old_value} → {new_value}"
+                            )
 
                     response = f"""
                     ✅ **PESANAN BERHASIL DIUPDATE**
@@ -407,136 +500,103 @@ def create_tools(user_id: str):
             print(f"--- ERROR UPDATING ORDER: {e} ---")
             return f"Terjadi kesalahan sistem saat mengupdate pesanan: {str(e)}"
 
-    @tool(args_schema=OrderSearchInput)
-    async def search_orders_by_customer(customer_name: str, product_name: str = ""):
-        """
-        Cari pesanan berdasarkan nama pelanggan.
-
-        Gunakan tool ini ketika pelanggan lupa nomor pesanan dan ingin mencari
-        pesanan berdasarkan nama mereka. Bisa juga ditambah nama produk untuk
-        mempersempit pencarian.
-
-        Args:
-            customer_name: Nama pelanggan untuk mencari pesanan
-            product_name: Nama produk (opsional untuk mempersempit pencarian)
-
-        Returns:
-            Daftar pesanan yang ditemukan untuk pelanggan tersebut
-        """
-        print(f"--- SEARCHING ORDERS FOR CUSTOMER: {customer_name} ---")
-
-        try:
-            async for db in get_db():
-                try:
-                    if product_name:
-                        query = text(
-                            """
-                            SELECT order_id, customer_name, product_name, quantity, status, created_at
-                            FROM orders 
-                            WHERE LOWER(customer_name) LIKE LOWER(:customer_name)
-                            AND LOWER(product_name) LIKE LOWER(:product_name)
-                            ORDER BY created_at DESC
-                            LIMIT 5
-                            """
-                        )
-                        result = await db.execute(
-                            query,
-                            {
-                                "customer_name": f"%{customer_name}%",
-                                "product_name": f"%{product_name}%",
-                            },
-                        )
-                    else:
-                        query = text(
-                            """
-                            SELECT order_id, customer_name, product_name, quantity, status, created_at
-                            FROM orders 
-                            WHERE LOWER(customer_name) LIKE LOWER(:customer_name)
-                            ORDER BY created_at DESC
-                            LIMIT 5
-                            """
-                        )
-                        result = await db.execute(
-                            query, {"customer_name": f"%{customer_name}%"}
-                        )
-
-                    orders = result.fetchall()
-
-                    if orders:
-                        response = f"🔍 **PESANAN DITEMUKAN UNTUK: {customer_name.upper()}**\n\n"
-
-                        for i, order in enumerate(orders, 1):
-                            status_emoji = {
-                                "ON-PROCESS": "🔄",
-                                "COMPLETED": "✅",
-                                "CANCELLED": "❌",
-                                "PREPARING": "👨‍🍳",
-                                "READY": "🎯",
-                            }
-
-                            status_icon = status_emoji.get(order["status"], "📋")
-
-                            response += f"""
-                            **{i}. Pesanan #{order['order_id']}**
-                            - Produk: {order['product_name']} (Qty: {order['quantity']})
-                            - Status: {status_icon} {order['status']}
-                            - Tanggal: {order['created_at'].strftime('%d/%m/%Y %H:%M')}
-
-                            """
-
-                        response += "\n💡 Ingin cek detail lengkap? Berikan nomor pesanan yang spesifik."
-
-                        print(f"✅ Found {len(orders)} orders for {customer_name}")
-                        return response.strip()
-                    else:
-                        print(f"❌ No orders found for: {customer_name}")
-                        return f"❌ Tidak ditemukan pesanan untuk nama **{customer_name}**.\n\n💡 Pastikan nama yang dimasukkan benar atau coba dengan variasi nama yang berbeda."
-
-                except Exception as e:
-                    print(f"❌ Database error: {e}")
-                    return f"Terjadi kesalahan saat mencari pesanan: {str(e)}"
-
-        except Exception as e:
-            print(f"--- ERROR SEARCHING ORDERS: {e} ---")
-            return f"Terjadi kesalahan sistem saat mencari pesanan: {str(e)}"
-
     @tool
     def search_user_knowledge(query: str) -> str:
         """
-        Cari informasi dari basis pengetahuan pengguna.
+        Cari informasi produk dari vectordatabase.
 
+        Tool ini akan:
+        1. Mencari produk di vectordatbase terlebih dahulu (akurat & real-time)
+        2. Jika tidak ditemukan, baru cari di vector knowledge base
+        3. Selalu menampilkan harga dan informasi lengkap
         Digunakan saat pengguna menanyakan produk, layanan, panduan, atau FAQ.
         """
         try:
-            results = vectorstore.similarity_search_with_relevance_scores(
-                query, k=5, filter={"user_id": user_id}
+            results = vectorstore.similarity_search(
+                query, k=3, filter={"user_id": user_id}
             )
-            MIN_SCORE = 0.75
+            return (
+                results[0].page_content
+                if results
+                else "Tidak ditemukan informasi relevan."
+            )
+        except Exception as e:
+            return f"Terjadi kesalahan: {str(e)}"
 
-            relevant = [(doc, score) for doc, score in results if score >= MIN_SCORE]
+    @tool(args_schema=GetProductByUserID)
+    async def get_product_menu(user: str = None) -> str:
+        """
+        Tampilkan menu produk lengkap dengan harga.
 
-            if not relevant:
-                return "Tidak ditemukan informasi relevan di basis pengetahuan."
+        Gunakan tool ini ketika pelanggan ingin melihat:
+        - Semua produk yang tersedia
+        - Daftar harga lengkap
 
-            info_parts = []
-            for i, (doc, score) in enumerate(relevant[:3]):
-                title = doc.metadata.get("title", "Dokumen Tanpa Judul")
-                info_parts.append(
-                    f"Result {i+1} - {title} (Skor: {score:.2f}):\n{doc.page_content}"
+        Args:
+            user: ID pengguna (opsional)
+        """
+        user = user_id
+        logger.info(f"📋 Getting product menu dari User: {user or 'all'}")
+
+        try:
+            async for db in get_db():
+                query = text(
+                    """
+                    SELECT name, description, price
+                    FROM products
+                    WHERE user_id = :user_id
+                """
+                )
+                result = await db.execute(query, {"user_id": user})
+                products = result.mappings().all()
+
+                if not products:
+                    return "❌ Tidak ada produk yang tersedia saat ini."
+
+                # Format menu
+                response = ["🍽️ **MENU PRODUK**\n"]
+
+                for product in products:
+                    price_formatted = f"Rp {product['price']:,.0f}".replace(",", ".")
+                    item_line = f"• **{product['name']}** - {price_formatted}"
+                    if product["description"]:
+                        item_line += f"\n  _{product['description']}_"
+                    response.append(item_line)
+
+                response.append(
+                    "\n💡 **Info:** Untuk memesan, sebutkan nama produk dan detail pesanan Anda!"
                 )
 
-            return "\n\n".join(info_parts)
+                return "\n".join(response)
 
         except Exception as e:
-            logger.error(f"Knowledge search failed: {e}")
-            return f"Terjadi kesalahan saat mencari informasi: {str(e)}"
+            logger.error(f"❌ Gagal mengambil menu: {e}")
+            return f"❌ Terjadi kesalahan saat mengambil menu: {str(e)}"
 
     local_tools = [
         search_user_knowledge,
         save_order,
         check_order_status,
-        cancel_order,  # NEW
-        update_order,  # NEW
+        cancel_order,
+        update_order,
+        get_product_menu,
+        send_image_to_customer,
     ]
 
     return local_tools
+
+
+def send_message_to_admin_service(message: str):
+    try:
+        req = requests.post(
+            "http://arisbara.cloud:3414/send-message",
+            data={
+                "session_id": "edb0439d-2bb2-44fd-94b7-272c2a166506",
+                "to": "082157704435",
+                "message": message,
+            },
+        )
+        return req.json()
+    except Exception as e:
+        logger.error(f"Notification sending failed: {e}")
+        return False

@@ -2,6 +2,7 @@ from langchain_chroma import Chroma
 from utils.model import embedding_function
 from utils.chromadb import collection,client,embedding_model
 from langchain_core.documents import Document
+
 vectorstore = Chroma(
     client=client,
     collection_name="cs_ai_knowledge",
@@ -17,11 +18,7 @@ def check_product_exists(product_id: str) -> bool:
 
 def _create_product_document(product) -> str:
     description = product['description'] if product['description'] else "Tidak ada deskripsi."
-    return (
-        f"Nama Produk: {product['name']}\n"
-        f"Deskripsi: {description}\n" 
-        f"Harga: {product['price']}"
-    )
+    return (f"Nama Produk: {product['name']}\n"f"Deskripsi: {description}\n" f"Harga: {product['price']}")
 
 
 def upsert_product_to_chroma(product):
