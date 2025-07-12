@@ -10,15 +10,17 @@ from app.service.agent.models import (
 from config.postgresql import get_db
 from datetime import datetime, timedelta
 from sqlalchemy import text
-import uuid, logging
+import uuid, logging, os
+from dotenv import load_dotenv
 from app.service.chromadb import vectorstore
 import requests, asyncio
 from app.service.agent.services.send_message_to_admin import (
     send_message_to_admin_service_async,
-    send_image_to_admin_service_async,
 )
 
+load_dotenv()
 logger = logging.getLogger(__name__)
+BASE_IMAGE_URL = "https://cees.arisbara.cloud/static"
 
 
 def create_tools(user_id: str):
@@ -162,12 +164,15 @@ def create_tools(user_id: str):
                     print("✅Product Image : ", product[1])
 
                     if product:
-                        image_url = product[1]
-                        response = f"Ini gambar produk **{product[0]}**"
-
+                        image_url = f"{BASE_IMAGE_URL}/uploads/{product[1]}"
+                        message = f"""Ini gambar produk **{product[0]}**
+                        
+                            ini gambarnya yaa {image_url}
+                        """
                         print(f"✅ product found: {product[0]}")
-                        await send_image_to_admin_service_async(response, image_url)
-                        return response.strip()
+                        # await send_message_to_admin_service_async(message)
+                        # await send_image_to_admin_service_async(response, image_url)
+                        return message.strip()
                     else:
                         print(f"❌ product gambar not found: {name}")
                         return f"❌ Gambar produk dengan nama **{name}** tidak ditemukan.\n\n💡 Cek lagi nama produk Anda."
@@ -523,8 +528,8 @@ def create_tools(user_id: str):
         except Exception as e:
             return f"Terjadi kesalahan: {str(e)}"
 
-    @tool(args_schema=GetProductByUserID)
-    async def get_product_menu(user: str = None) -> str:
+    @tool
+    async def get_product_menu() -> str:
         """
         Tampilkan menu produk lengkap dengan harga.
 
@@ -532,12 +537,11 @@ def create_tools(user_id: str):
         - Semua produk yang tersedia
         - Daftar harga lengkap
 
-        Args:
-            user: ID pengguna (opsional)
+        Tool ini menggunakan user_id dari parameter yang sudah di-pass ke create_tools().
         """
-        user = user_id
-        logger.info(f"📋 Getting product menu dari User: {user or 'all'}")
 
+        logger.info(f"📋 Getting product menu dari User: {user_id or 'all'}")
+        logger.info(f"DEBUG tool get_product_menu: user_id from closure = {user_id}")
         try:
             async for db in get_db():
                 query = text(
@@ -547,14 +551,18 @@ def create_tools(user_id: str):
                     WHERE user_id = :user_id
                 """
                 )
-                result = await db.execute(query, {"user_id": user})
+                result = await db.execute(
+                    query,
+                    {"user_id": str(user_id)},
+                    execution_options={"compiled_cache": None},
+                )
                 products = result.mappings().all()
-
+                print("Products : ", products)
                 if not products:
                     return "❌ Tidak ada produk yang tersedia saat ini."
 
                 # Format menu
-                response = ["🍽️ **MENU PRODUK**\n"]
+                response = ["🍽️ **Yang dijual**\n"]
 
                 for product in products:
                     price_formatted = f"Rp {product['price']:,.0f}".replace(",", ".")

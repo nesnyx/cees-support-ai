@@ -16,7 +16,7 @@ async def send_message_to_admin_service_async(message: str) -> Dict[str, str]:
         url = "http://arisbara.cloud:3414/send-message"
         payload = {
             "session_id": "edb0439d-2bb2-44fd-94b7-272c2a166506",
-            "to": "120363398210860666@g.us",
+            "to": "082157704435",
             "message": textwrap.dedent(message),
         }
         logger.info(f"🚀 Sending async JSON payload: {payload}")

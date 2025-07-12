@@ -1,17 +1,16 @@
-import uuid, logging, psycopg_pool
+import uuid, logging, psycopg_pool,os
 from app.service.agent.tools.products import create_tools
 from typing import Dict, Any
 from datetime import datetime
-
+from dotenv import load_dotenv
 from langchain.agents import initialize_agent, AgentType
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg.rows import dict_row
-
-
 from utils.model import llm
 
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +19,8 @@ class FixedLangGraphAgent:
     """Fixed LangGraph Agent dengan proper connection management"""
 
     def __init__(self):
-        self.conninfo = "postgres://user_production:kodecesar1234@arisbara.cloud:3499/cees_db?sslmode=prefer&options=-csearch_path%3Dhistory"
+        self.conninfo = os.getenv("POSTGRESQL_CONNECTION_URL")
         self.pool = None
-        self.agent = None
         self.postgres_checkpointer = None
         self.initialized = False
 
@@ -34,9 +32,7 @@ class FixedLangGraphAgent:
             )
         )
 
-    def create_thread_id(
-        self, user_id: str, customer_phone: str, conversation_type: str = "support"
-    ) -> str:
+    def create_thread_id(self, user_id: str, customer_phone: str) -> str:
         """
         Create deterministic thread ID untuk consistency
         Format: {app_prefix}_{user_id}_{customer_identifier}_{type}
@@ -44,19 +40,17 @@ class FixedLangGraphAgent:
         return str(
             uuid.uuid5(
                 uuid.NAMESPACE_DNS,
-                f"cees_ai_{user_id}_{customer_phone}_{conversation_type}_{datetime.now().strftime('%Y%m%d')}",
+                f"cees_ai_{user_id}_{customer_phone}",
             )
         )
 
     # 🔥 Production Best Practice
-    def create_checkpoint_namespace(
-        self, user_id: str, business_context: str = "cs"
-    ) -> str:
+    def create_checkpoint_namespace(self, user_id: str, customer_phone: str) -> str:
         """
         Create checkpoint namespace untuk logical separation
         Format: {app}_{business_unit}_{user_id}
         """
-        return f"cees_ai_{business_context}_{user_id}"
+        return f"cees_ai_{user_id}_{customer_phone}"
 
     async def initialize_persistent_resources(self):
         """Initialize persistent connection pool dan memory"""
@@ -68,6 +62,7 @@ class FixedLangGraphAgent:
             self.pool = psycopg_pool.AsyncConnectionPool(
                 conninfo=self.conninfo,
                 max_size=10,
+                min_size=5,
                 kwargs={
                     "autocommit": True,
                     "prepare_threshold": 0,
@@ -82,7 +77,6 @@ class FixedLangGraphAgent:
 
             # Get persistent connection untuk checkpointer
             self.memory_conn = await self.pool.getconn()
-
             # Create PostgreSQL checkpointer
             self.postgres_checkpointer = AsyncPostgresSaver(self.memory_conn)
 
@@ -114,30 +108,31 @@ class FixedLangGraphAgent:
         tools = create_tools(user_id)
 
         # Create agent dengan persistent memory
-        self.agent = create_react_agent(
+        agent = create_react_agent(
             model=llm, tools=tools, checkpointer=self.postgres_checkpointer
         )
-        print(f"Agent : {self.agent}")
-
+        print(f"Agent : {agent}")
 
         self.user_persona = user_persona
         logger.info(f"Agent created for user {user_id}")
 
-        return True
+        return agent
 
     async def process_query(
-        self, user: Dict[str, Any], prompt: str, telp_customer: str, question: str
-    ) -> Dict[str, Any]:
+        self, user: str, prompt: str, telp_customer: str, question: str
+    ):
         """Process query dengan fixed connection management"""
 
         user_id = str(user["id"])
         session_id = self.create_session_id(user_id, telp_customer)
         thread_id = self.create_thread_id(user_id, telp_customer)
-        checkpoint_ns = self.create_checkpoint_namespace(user_id, telp_customer)
+        checkpoint_ns = self.create_checkpoint_namespace(
+            user_id=user_id, customer_phone=telp_customer
+        )
         try:
             # Create agent if not exists
-            if not self.agent:
-                await self.create_agent(user_id, prompt)
+
+            agent = await self.create_agent(user_id, prompt)
 
             # Config untuk memory
             config = {
@@ -151,28 +146,18 @@ class FixedLangGraphAgent:
             system_msg = SystemMessage(
                 content=f"""
                 {prompt}
-
                 Kamu adalah asisten AI Customer Service dengan akses ke alat berikut:
-
-                1. **search_user_knowledge**: Untuk mencari informasi dalam basis pengetahuan (produk, layanan, FAQ)
-                2. **save_order**: Untuk menyimpan pesanan ke database setelah detail lengkap & konfirmasi
-                3. **check_order_status**: Untuk mengecek status pesanan berdasarkan Order ID
-                4. **send_image_to_customer** : Untuk mengirimkan image_url dari table product dan dikirim
-                INSTRUKSI PENTING:
-                - Gunakan search_user_knowledge untuk menjawab pertanyaan produk/layanan
-                - Gunakan check_order_status ketika pelanggan memberikan nomor pesanan
-                - Gunakan save_order hanya setelah SEMUA detail dikonfirmasi pelanggan
-                - Gunakan send_image_to_customer ketika customer meminta gambar yang related berdasarkan nama produknya
-                - Ingat percakapan sebelumnya (memory otomatis tersimpan)
-                - Berikan jawaban yang ramah, akurat, dan membantu
-                - Gunakan Bahasa Indonesia yang baik dan benar
-                JIKA CUSTOMER MAU PESAN SERTAKAN MENU DULU JIKA BELUM ADA MENYEBUTKAN MENU
-                🚨 **PERINGATAN KERAS:**
-                JANGAN PERNAH menulis dalam bahasa selain Bahasa Indonesia!
-                Ini adalah sistem Customer Service Indonesia!
-                ddan jangan membicarakan hal diluar dari konteks yang seharusnya.
+                - Gunakan tool sesuai kebutuhan saja (jangan panjang-panjang).
+                - Jawaban pelanggan HARUS simple, Tidak usah banyak basa-basi! Fokus pada inti informasi.
+                - Untuk masalah teknis, cukup katakan: "Maaf, sedang ada gangguan teknis, silakan coba lagi."
+                - Jangan berikan teks pembuka atau penutup berlebih, tidak usah ada salam kecuali diminta.
+                - Jawab hanya sesuai konteks pertanyaan pelanggan tapi tetap santai dan ramah dan tetap friendly.
+                - Gunakan Bahasa Indonesia singkat, jelas, dan langsung ke poin.
+                INSTRUKSI KHUSUS:
+                - Selalu ringkas! dan Jawaban yang efisien dan efektif
+                - Kalau bisa ada emoticon agar tidak begitu kaku.
+                - JANGAN MENGGUNAKAN BAHASA LAIN SELAIN INDONESIA saja.
                 """
-                
             )
 
             user_msg = HumanMessage(content=question)
@@ -180,7 +165,7 @@ class FixedLangGraphAgent:
             logger.info(f"Processing query for user {user_id}")
 
             # Process dengan agent
-            response = await self.agent.ainvoke(
+            response = await agent.ainvoke(
                 {"messages": [system_msg, user_msg]}, config=config
             )
             # Extract response
@@ -210,7 +195,6 @@ class FixedLangGraphAgent:
                 "status": "error",
             }
 
-    
 
 # Global instance
 ai_agent = FixedLangGraphAgent()

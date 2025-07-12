@@ -17,15 +17,17 @@ from app.service.chromadb import (
     delete_product_from_chroma,
     check_product_exists,
 )
+from PIL import Image
 from app.service.database.products import get_all_products_by_user
-import logging, os, shutil
+import logging, os, shutil,io
 
 router_product = APIRouter(prefix="/products")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 UPLOAD_ROOT = "public/uploads"
-BASE_IMAGE_URL = "https://cees.arisbara.cloud/static" 
+BASE_IMAGE_URL = "https://cees.arisbara.cloud/static"
+
 
 @router_product.get("/chroma/get-by-id")
 async def get_chroma_product(input: ProductID):
@@ -125,6 +127,26 @@ async def delete_product_endpoint(
     current_user=Depends(get_current_user),
 ):
     user_id = current_user["id"]
+    product = await get_product_by_id(db, product_id, user_id)
+    print(product)
+    if not product:
+        raise HTTPException(
+            status_code=404,
+            detail="Produk tidak ditemukan atau Anda tidak punya hak akses.",
+        )
+
+    image_url = product.get("image_url")
+    if image_url:
+        image_path = os.path.join(UPLOAD_ROOT, image_url)
+        if os.path.exists(image_path):
+            try:
+                os.remove(image_path)
+                logger.info(f"🗑️ Gambar berhasil dihapus: {image_path}")
+            except Exception as e:
+                logger.error(f"❌ Gagal menghapus gambar: {e}")
+        else:
+            logger.warning(f"⚠️ Gambar tidak ditemukan di path: {image_path}")
+
     delete_product_success = await delete_product(db, product_id, user_id)
     print(f"delete : {delete_product_success}")
     if not delete_product_success:

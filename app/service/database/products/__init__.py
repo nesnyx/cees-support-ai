@@ -46,7 +46,7 @@ async def get_product_by_id(db: AsyncSession, product_id: str, user_id: str) -> 
     Mengembalikan satu dictionary atau None jika tidak ditemukan.
     """
     query = text("""
-        SELECT id, user_id, name, description, price 
+        SELECT id, user_id, name, description, price,image_url 
         FROM products 
         WHERE id = :id AND user_id = :user_id
     """)

@@ -6,9 +6,8 @@ from dotenv import load_dotenv
 import os
 load_dotenv()
 
-set_llm_cache(InMemoryCache())
 
-API_KEY = os.getenv("API_KEY_2")
+API_KEY = os.getenv("API_KEY")
 llm = ChatGoogleGenerativeAI(api_key=API_KEY, model="gemini-2.5-flash",temperature=0.1)
 EMBEDDING_MODEL = "models/embedding-001"
 

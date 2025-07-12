@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field
 
 
@@ -64,3 +64,15 @@ class SendImageProductToCustomer(BaseModel):
 
 class GetProductByUserID(BaseModel):
     user: str = Field(description="ID pelanggan untuk mencari produk")
+
+
+class EnhancedOrderInput(BaseModel):
+    customer_name: str = Field(description="Nama lengkap pelanggan")
+    product_name: str = Field(description="Nama produk yang dipesan")
+    quantity: int = Field(description="Jumlah produk yang dipesan")
+    custom_attributes: Optional[Dict[str, Any]] = Field(
+        description="Atribut khusus produk contohnya (level_ice, level_sugar, temperature, dll)",
+        default=None,
+    )
+    notes: Optional[str] = Field(description="Catatan tambahan", default=None)
+    status: str = Field(description="Status pemesanan", default="ON-PROCESS")
