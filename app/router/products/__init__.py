@@ -1,5 +1,16 @@
-from fastapi import APIRouter, status, Request, Depends, Form, File, UploadFile
-
+import time
+from fastapi import (
+    APIRouter,
+    status,
+    Request,
+    Depends,
+    Form,
+    File,
+    UploadFile,
+    BackgroundTasks,
+    FastAPI,
+)
+from contextlib import asynccontextmanager
 from fastapi.exceptions import HTTPException
 from sqlalchemy import text
 from app.router.products.model import ProductInput, ProductID, ProductUpdate
@@ -18,8 +29,9 @@ from app.service.chromadb import (
     check_product_exists,
 )
 from PIL import Image
-from app.service.database.products import get_all_products_by_user
-import logging, os, shutil,io
+import logging, os, shutil, asyncio
+
+
 
 router_product = APIRouter(prefix="/products")
 logging.basicConfig(level=logging.INFO)
@@ -193,3 +205,9 @@ async def get_user_products(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Terjadi kesalahan: {str(e)}")
+
+
+
+
+
+

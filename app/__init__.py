@@ -1,3 +1,6 @@
+from contextlib import asynccontextmanager
+import time
+import logging, os, shutil, asyncio
 from fastapi import FastAPI, APIRouter
 from app.router.chatbot import router_chat
 from app.router.products import router_product
@@ -8,6 +11,38 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+
+# async def periodic_task():
+#     while True:
+#         try:
+#             print("🕒 Menjalankan tugas periodik...")
+#             await asyncio.sleep(10)
+#         except asyncio.CancelledError:
+#             print("Tugas periodik dibatalkan.")
+#             break
+#         except Exception as e:
+#             print(f"Terjadi error pada tugas periodik: {e}")
+#             await asyncio.sleep(10) 
+
+
+
+# @asynccontextmanager
+# async def lifespan(app: FastAPI):
+#     print("🚀 Aplikasi mulai berjalan. Menjadwalkan tugas periodik...")
+#     background_task = asyncio.create_task(periodic_task())
+#     yield 
+#     print("Aplikasi berhenti. Menghentikan tugas background...")
+#     background_task.cancel()
+#     try:
+#         await background_task
+#     except asyncio.CancelledError:
+#         print("Tugas background berhasil dihentikan.")
+
 
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="Customer Service AI")

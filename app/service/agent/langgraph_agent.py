@@ -1,9 +1,6 @@
 import uuid, logging, psycopg_pool,os
 from app.service.agent.tools.products import create_tools
-from typing import Dict, Any
-from datetime import datetime
 from dotenv import load_dotenv
-from langchain.agents import initialize_agent, AgentType
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -77,6 +74,7 @@ class FixedLangGraphAgent:
 
             # Get persistent connection untuk checkpointer
             self.memory_conn = await self.pool.getconn()
+            
             # Create PostgreSQL checkpointer
             self.postgres_checkpointer = AsyncPostgresSaver(self.memory_conn)
 
