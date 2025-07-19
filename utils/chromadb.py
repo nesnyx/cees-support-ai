@@ -11,3 +11,5 @@ collection = client.get_or_create_collection("cs_ai_knowledge")
 
 # --- Embedding Model ---
 embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+
+

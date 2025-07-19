@@ -14,9 +14,9 @@ class Prompt:
 
 async def create_update_prompt(user_id : str, system_template,db : AsyncSession):
         new_prompt_id = str(uuid.uuid4())
-        query_select = text("SELECT id, user_id, system_template FROM prompt_template WHERE user_id = :user_id")
-        query_insert = text("INSERT INTO prompt_template(id, system_template, user_id) VALUES (:id,:system_template, :user_id)")
-        query_update = text("UPDATE prompt_template SET system_template = :system_template WHERE user_id = :user_id")
+        query_select = text("SELECT id, user_id, system_template FROM prompts WHERE user_id = :user_id")
+        query_insert = text("INSERT INTO prompts(id, system_template, user_id) VALUES (:id,:system_template, :user_id)")
+        query_update = text("UPDATE prompts SET system_template = :system_template WHERE user_id = :user_id")
         try:
             check_template =  await db.execute(query_select, {
                 "user_id" : user_id
@@ -45,7 +45,7 @@ async def create_update_prompt(user_id : str, system_template,db : AsyncSession)
 
 async def create_prompt(user_id : str,system_template:str ,db : AsyncSession):
         new_prompt_id = str(uuid.uuid4())
-        query = text("INSERT INTO prompt_template(id, system_template, user_id) VALUES (:id,:system_template, :user_id) ")
+        query = text("INSERT INTO prompts(id, system_template, user_id) VALUES (:id,:system_template, :user_id) ")
         try:
             await db.execute(query,{
                 "id":new_prompt_id,
@@ -61,7 +61,7 @@ async def create_prompt(user_id : str,system_template:str ,db : AsyncSession):
             return {"status": False, "id": None, "error": str(e)}
 
 async def get_prompt(user_id : str ,db : AsyncSession):
-        query = text("SELECT id, user_id, system_template FROM prompt_template WHERE user_id = :user_id")
+        query = text("SELECT id, user_id, system_template FROM prompts WHERE user_id = :user_id")
         check_template =  await db.execute(query, {
             "user_id" : user_id
         })

@@ -5,3 +5,6 @@ class RegisterInput(BaseModel):
     password : str
 
 
+class LoginInput(BaseModel):
+    username : str
+    password : str

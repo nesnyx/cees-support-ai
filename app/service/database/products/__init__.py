@@ -1,4 +1,4 @@
-from config.mysql import get_db
+from config.postgresql import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import text
@@ -15,7 +15,7 @@ class Product:
 
     async def get_product(self):
         query = text("SELECT id, user_id, name, price, description FROM products WHERE user_id = :user_id")
-        check_account =  await db.execute(query, {
+        check_account =  await self.db.execute(query, {
             "user_id" : self.user_id
         })
         row = check_account.fetchone()
@@ -46,13 +46,12 @@ async def get_product_by_id(db: AsyncSession, product_id: str, user_id: str) -> 
     Mengembalikan satu dictionary atau None jika tidak ditemukan.
     """
     query = text("""
-        SELECT id, user_id, name, description, price 
+        SELECT id, user_id, name, description, price,image_url 
         FROM products 
         WHERE id = :id AND user_id = :user_id
     """)
     
     result = await db.execute(query, {"id": product_id, "user_id": user_id})
-    
     row = result.mappings().first()
     print(f"Get product by id : {row}")
     if not row:
@@ -63,16 +62,17 @@ async def get_product_by_id(db: AsyncSession, product_id: str, user_id: str) -> 
 
 
 
-async def insert_product(db: AsyncSession,input:ProductInput, user_id: str):
+async def insert_product(db: AsyncSession,name,price,description, image,user_id: str):
         new_product_id = str(uuid.uuid4())
-        query = text("INSERT INTO products(id,user_id, name, price, description) VALUES (:id,:user_id, :name, :price, :description )")
+        query = text("INSERT INTO products(id,user_id, name, price,image_url, description) VALUES (:id,:user_id, :name, :price,:image_url, :description )")
         try:
             await db.execute(query, {
                 "id": new_product_id,
                 "user_id": user_id,
-                "name": input.name,
-                "price": input.price,
-                "description": input.description
+                "name": name,
+                "price": price,
+                "image_url": image,
+                "description": description
             })
             await db.commit()
             return {"status": True, "id": new_product_id}

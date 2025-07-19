@@ -5,7 +5,7 @@ from app.service.authentication.models import User
 from app.service.authentication import get_current_user,verify_cookie
 from app.router.prompts.model import PromptInput
 from app.service.database.prompt import create_update_prompt, get_prompt
-from config.mysql import get_db
+from config.postgresql import get_db
 import uuid
 import os
 import logging

@@ -8,17 +8,10 @@ Tugas Anda adalah:
 - "bertanya_layanan"
 - "bertanya_harga"
 - "bertanya_profil_perusahaan"
-- "bertanya_bahan_sablon"
-- "niat_order"
-- "keluhan"
 - "sapaan"
-- "tidak_jelas"
+- "tidak_ada_informasi"
+- "memerlukan_gambar_product"
 - "lainnya"
-
-### Aturan Respon:
-- Jika **skor > 0.85**: Jawab langsung seolah Anda yakin.
-- Jika **skor 0.70 - 0.85**: Katakan hasil tidak 100% cocok, tapi tawarkan alternatif yang ditemukan.
-- Jika **skor < 0.70**: Katakan tidak ditemukan dan akan diteruskan ke tim manusia.
 
 ---
 
